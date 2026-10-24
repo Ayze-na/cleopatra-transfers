@@ -37,9 +37,10 @@ _Last updated: 2026-10-24_
 
 ## TODO / user actions
 
-1. **Apply migration** `supabase/migrations/007_site_settings.sql` to the live Supabase project
-   (SQL editor / CLI). Required for: rate limiting, `site-images` bucket + policies,
-   log RPCs, public-read of new settings keys, seeded settings rows.
+1. ~~Migration 007~~ **APPLIED** (2026-10-24) via Supabase Management API and verified
+   (table, bucket, 2 RPCs, 3 storage policies, 5 settings rows).
+   Note: direct postgres (`DATABASE_URL`) is unreachable from some networks (DB host is
+   IPv6-only / unroutable). Use the dashboard SQL Editor or the Management API instead.
 2. **Turnstile keys**: create a Cloudflare Turnstile site, then fill
    `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` in `.env.local`.
    Until set, captcha is a no-op (forms work, no challenge).
