@@ -59,6 +59,12 @@ export default function Footer({ locale }: { locale: string }) {
 
         <div className="border-t border-gold/20 mt-12 pt-8 text-center">
           <p className="text-pharaoh-ivory/50 text-sm">© 2026 Cleopatra Transfers. {t('rights')}</p>
+          <a
+            href="/admin"
+            className="inline-block mt-2 text-xs uppercase tracking-[0.25em] text-pharaoh-ivory/30 hover:text-gold transition-colors"
+          >
+            {t('admin')}
+          </a>
         </div>
       </div>
     </footer>

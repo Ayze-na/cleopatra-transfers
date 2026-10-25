@@ -50,7 +50,7 @@ export default function AdminLoginPage() {
 
     setStep('code');
     setCooldown(60);
-    setInfo(`A 6-digit code was sent to ${normalizedEmail}.`);
+    setInfo(`A one-time code was sent to ${normalizedEmail}.`);
   };
 
   const verifyCode = async (event: React.FormEvent) => {
@@ -105,7 +105,7 @@ export default function AdminLoginPage() {
           <p className="text-sm text-pharaoh-ivory/60 mb-6">
             {step === 'email'
               ? 'Use the email address registered by an existing admin. We will send you a one-time code.'
-              : 'Enter the 6-digit code from your inbox to continue.'}
+              : 'Enter the code from your inbox to continue.'}
           </p>
 
           {step === 'email' ? (
@@ -140,18 +140,18 @@ export default function AdminLoginPage() {
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                placeholder="000000"
+                placeholder="00000000"
                 value={code}
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 8))}
                 className="w-full bg-pharaoh-bg border border-gold/30 rounded px-4 py-3 text-center text-2xl tracking-[0.4em] text-pharaoh-ivory outline-none focus:border-gold"
-                maxLength={6}
+                maxLength={8}
                 required
               />
               {error && <p className="text-red-400 text-sm">{error}</p>}
               {info && <p className="text-pharaoh-ivory/60 text-sm">{info}</p>}
               <button
                 type="submit"
-                disabled={loading || code.length !== 6}
+                disabled={loading || code.length < 6}
                 className="w-full px-6 py-3 bg-gold text-black font-semibold rounded hover:bg-gold-light transition-colors disabled:opacity-50"
               >
                 {loading ? 'Verifying...' : 'Sign In'}

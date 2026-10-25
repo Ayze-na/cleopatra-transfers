@@ -146,7 +146,8 @@
     "privacy": "Datenschutz",
     "terms": "Bedingungen",
     "contactTitle": "Kontakt",
-    "rights": "Alle Rechte vorbehalten."
+    "rights": "Alle Rechte vorbehalten.",
+    "admin": "Admin-Bereich"
   },
   "terms": {
     "title": "Bedingungen",

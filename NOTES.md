@@ -1,9 +1,17 @@
 # Cleopatra Transfers — Project Notes
 
-_Last updated: 2026-10-24_
+_Last updated: 2026-10-25 — LIVE_
+
+## Deployment — LIVE
+- **https://cleopatra-transfers.vercel.app** — auto-deploys on `git push` to master (repo Ayze-na/cleopatra-transfers already linked in Vercel; all env vars already in the project).
+- Build blockers fixed on 2026-10-25:
+  1. **Corrupt `package-lock.json`** — 55 versionless stub entries (empty `{}` under `sharp/node_modules/@img/*`, `unrs-resolver`, `fsevents`, `@react-email/render`) crashed `npm install` (npm "Invalid Version" at arborist `canDedupe`, exit 1). Root amplifier: I had added `@react-email/render@^1.1.2` while `resend` pins `1.0.1` → conflicting duplicates in that subtree (it was never imported by code). Fix: removed it from `package.json`, deleted lockfile, regenerated clean (0 versionless entries; verified `npm install` exits 0 locally).
+  2. **Next.js 15.1.4 → 15.5.28** — Vercel blocks vulnerable versions (`VULNERABLE_NEXTJS_VERSION` / CVE-2025-66478). `eslint-config-next` bumped to match. `tsc --noEmit` + `next build` green locally.
+- Verified in production: `/en /ar /ru /de` → 200, `/admin/login` → 200.
+- Note: local `npm install` works again; the old lockfile backup was deleted.
 
 ## Stack
-- Next.js 15.1.4 (App Router), React 19, TypeScript, Tailwind
+- Next.js 15.5.28 (App Router), React 19, TypeScript, Tailwind
 - Supabase (Postgres, Auth, Storage, RLS), Resend, next-intl (en/ar/ru/de), zod, framer-motion
 - `npx` is blocked on this machine — typecheck with `node node_modules\typescript\bin\tsc --noEmit`, build with `node node_modules\next\dist\bin\next build`
 
@@ -32,21 +40,24 @@ _Last updated: 2026-10-24_
 
 ### Verification
 - `tsc --noEmit` clean
-- `next build` passes (17 routes). One benign warning: `resend` optional peer `@react-email/render` missing — plain-HTML emails still work; fix with `npm i @react-email/render` if desired.
+- `next build` passes (17 routes)
 - Google Fonts fetch can flake at build time (network); retry the build if that error appears.
 
 ## TODO / user actions
 
 1. ~~Migration 007~~ **APPLIED** (2026-10-24) via Supabase Management API and verified
-   (table, bucket, 2 RPCs, 3 storage policies, 5 settings rows).
-   Note: direct postgres (`DATABASE_URL`) is unreachable from some networks (DB host is
-   IPv6-only / unroutable). Use the dashboard SQL Editor or the Management API instead.
-2. **Turnstile keys**: create a Cloudflare Turnstile site, then fill
-   `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` in `.env.local`.
-   Until set, captcha is a no-op (forms work, no challenge).
-3. (Optional) `npm i @react-email/render` to silence the resend build warning.
+    (table, bucket, 2 RPCs, 3 storage policies, 5 settings rows).
+    Note: direct postgres (`DATABASE_URL`) is unreachable from some networks (DB host is
+    IPv6-only / unroutable). Use the dashboard SQL Editor or the Management API instead.
+2. **Deployment is LIVE** (2026-10-25). Going forward every `git push` auto-deploys —
+    no Vercel token or manual step needed.
+3. **Turnstile keys**: create a Cloudflare Turnstile site, then set
+    `NEXT_PUBLIC_TURNSTILE_SITE_KEY` + `TURNSTILE_SECRET_KEY` in the Vercel project env
+    (dashboard) AND `.env.local`. Until set, captcha is a no-op (forms work, no challenge).
 4. (Optional) Seed the site: add cars/cities/places/routes with images via admin panel,
-   set WhatsApp number, and upload terms/privacy documents.
+    set WhatsApp number, and upload terms/privacy documents.
+5. (Optional) Set `ADMIN_NOTIFICATION_EMAILS` + `NEXT_PUBLIC_ADMIN_WHATSAPP` in Vercel env
+    if both are currently empty.
 
 ## Key files
 - `src/lib/api-protection.ts` — Turnstile verify + rate limit
