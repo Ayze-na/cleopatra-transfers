@@ -11,7 +11,7 @@ import Turnstile from '@/components/Turnstile';
 
 interface Location { id: string; name: Record<string, string> | string; type: string; active: boolean; }
 interface Route { id: string; from_location_id: string; to_location_id: string; active: boolean; }
-interface Car { id: string; name: Record<string, string> | string; max_passengers: number; max_luggage: number; description?: Record<string, string> | string; active: boolean; }
+interface Car { id: string; name: Record<string, string> | string; max_passengers: number; max_luggage: number; description?: Record<string, string> | string; images?: string[] | null; active: boolean; }
 interface RoutePrice { route_id: string; car_id: string; currency: string; amount: number; }
 interface SlotReservation { car_id: string; slot: string; }
 interface PaymentMethod { id: string; code: string; display_name: string; details: string | null; requires_screenshot: boolean; }
@@ -410,6 +410,9 @@ export default function DirectRideWizard() {
                     onChange={() => setCarId(c.id)}
                     className="accent-gold"
                   />
+                  {c.images && c.images.length > 0 && (
+                    <img src={c.images[0]} alt={carName(c)} className="w-20 h-14 object-cover rounded shrink-0" />
+                  )}
                   <div className="flex-1">
                     <div className="text-pharaoh-ivory font-semibold flex items-center gap-2">
                       {carName(c)}
