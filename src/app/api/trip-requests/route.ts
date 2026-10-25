@@ -2,7 +2,13 @@
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { notificationProvider } from '@/lib/notifications/provider';
-import { verifyTurnstile, enforceRateLimit, turnstileConfigured } from '@/lib/api-protection';
+import {
+  verifyTurnstile,
+  enforceRateLimit,
+  turnstileConfigured,
+  readJsonBody,
+  escapeHtml,
+} from '@/lib/api-protection';
 
 const tripSchema = z.object({
   start_date: z.string(),
@@ -22,7 +28,10 @@ const tripSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readJsonBody(request, 8192);
+    if (!body) {
+      return NextResponse.json({ error: 'Request too large or malformed' }, { status: 413 });
+    }
     const parsed = tripSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -83,7 +92,7 @@ export async function POST(request: NextRequest) {
         .sendEmail({
           to: email,
           subject: `New trip request ${tripRequest.reference}`,
-          body: `<p>New trip request from ${data.client_name} (${data.client_email}). Reference: ${tripRequest.reference}.</p>`,
+           body: `<p>New trip request from ${escapeHtml(data.client_name)} (${escapeHtml(data.client_email)}). Reference: ${escapeHtml(String(tripRequest.reference))}.</p>`,
           event: 'admin_notify_trip_request',
           relatedBookingId: tripRequest.id,
         })

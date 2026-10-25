@@ -15,6 +15,7 @@ import DocumentsManager from '@/components/admin/DocumentsManager';
 import LogsManager from '@/components/admin/LogsManager';
 import BookingsManager from '@/components/admin/BookingsManager';
 import TripRequestsManager from '@/components/admin/TripRequestsManager';
+import PaymentMethodsManager from '@/components/admin/PaymentMethodsManager';
 import AdminsManager from '@/components/admin/AdminsManager';
 
 const TABS = [
@@ -26,6 +27,7 @@ const TABS = [
   { id: 'cities', label: 'Cities' },
   { id: 'places', label: 'Places' },
   { id: 'cars', label: 'Cars' },
+  { id: 'payment-methods', label: 'Payment Methods' },
   { id: 'contact-settings', label: 'Contact & WhatsApp' },
   { id: 'documents', label: 'Documents' },
   { id: 'admin-settings', label: 'Settings' },
@@ -98,6 +100,8 @@ export default function AdminPage() {
         return <PlacesManager />;
       case 'cars':
         return <CarsManager />;
+      case 'payment-methods':
+        return <PaymentMethodsManager />;
       case 'contact-settings':
         return <ContactSettingsManager />;
       case 'documents':

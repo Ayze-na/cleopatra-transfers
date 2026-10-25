@@ -2,7 +2,13 @@
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 import { notificationProvider } from '@/lib/notifications/provider';
-import { verifyTurnstile, enforceRateLimit, turnstileConfigured } from '@/lib/api-protection';
+import {
+  verifyTurnstile,
+  enforceRateLimit,
+  turnstileConfigured,
+  readJsonBody,
+  escapeHtml,
+} from '@/lib/api-protection';
 
 const bookingSchema = z
   .object({
@@ -19,8 +25,12 @@ const bookingSchema = z
   client_phone: z.string().min(5).max(30),
   client_email: z.string().email(),
   nationality: z.string().min(2).max(100),
-  passport_file_path: z.string().max(500).or(z.literal('')).optional(),
-  payment_method: z.enum(['cash', 'bank_transfer']),
+  passport_file_path: z
+    .string()
+    .regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.[A-Za-z0-9]{1,8}$/)
+    .or(z.literal(''))
+    .optional(),
+  payment_method: z.string().min(2).max(64),
   payment_screenshot_path: z.string().optional(),
   currency: z.enum(['USD', 'EGP', 'EUR']),
   language: z.string().default('en'),
@@ -30,14 +40,14 @@ const bookingSchema = z
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readJsonBody(request, 8192);
+    if (!body) {
+      return NextResponse.json({ error: 'Request too large or malformed' }, { status: 413 });
+    }
     const parsed = bookingSchema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: 'Invalid data', details: parsed.error.flatten() },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'Invalid data' }, { status: 400 });
     }
 
     const data = parsed.data;
@@ -95,8 +105,8 @@ export async function POST(request: NextRequest) {
     notificationProvider
       .sendEmail({
         to: data.client_email,
-        subject: 'Booking received - Cleopatra Transfers',
-        body: `<p>Thank you ${data.client_name}. Your booking reference is <strong>${booking.reference}</strong>. Status: Pending approval.</p>`,
+          subject: 'Booking received - Cleopatra Transfers',
+          body: `<p>Thank you ${escapeHtml(data.client_name)}. Your booking reference is <strong>${escapeHtml(String(booking.reference))}</strong>. Status: Pending approval.</p>`,
         language: data.language,
         event: 'booking_ack',
         relatedBookingId: booking.id,
@@ -108,8 +118,8 @@ export async function POST(request: NextRequest) {
       notificationProvider
         .sendEmail({
           to: email,
-          subject: `New direct booking ${booking.reference}`,
-          body: `<p>New booking from ${data.client_name} (${data.client_email}). Reference: ${booking.reference}.</p>`,
+        subject: `New direct booking ${escapeHtml(String(booking.reference))}`,
+        body: `<p>New booking from ${escapeHtml(data.client_name)} (${escapeHtml(data.client_email)}). Reference: ${escapeHtml(String(booking.reference))}.</p>`,
           event: 'admin_notify_booking',
           relatedBookingId: booking.id,
         })

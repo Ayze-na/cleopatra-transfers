@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { verifyTurnstile, enforceRateLimit, turnstileConfigured } from '@/lib/api-protection';
+import {
+  verifyTurnstile,
+  enforceRateLimit,
+  turnstileConfigured,
+  readJsonBody,
+  escapeHtml,
+} from '@/lib/api-protection';
 import { notificationProvider } from '@/lib/notifications/provider';
 
 const contactSchema = z.object({
@@ -12,7 +18,10 @@ const contactSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readJsonBody(request, 8192);
+    if (!body) {
+      return NextResponse.json({ error: 'Request too large or malformed' }, { status: 413 });
+    }
     const parsed = contactSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -45,8 +54,8 @@ export async function POST(request: NextRequest) {
       notificationProvider
         .sendEmail({
           to: email,
-          subject: `New contact message from ${data.name}`,
-          body: `<p>${data.name} (${data.email}) wrote:</p><blockquote>${data.message}</blockquote>`,
+          subject: 'New contact message',
+          body: `<p>${escapeHtml(data.name)} (${escapeHtml(data.email)}) wrote:</p><blockquote>${escapeHtml(data.message)}</blockquote>`,
           event: 'contact_message',
         })
         .catch((err) => console.error('Contact notify email failed:', err));

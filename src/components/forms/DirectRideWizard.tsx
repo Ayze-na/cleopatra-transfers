@@ -14,6 +14,7 @@ interface Route { id: string; from_location_id: string; to_location_id: string; 
 interface Car { id: string; name: Record<string, string> | string; max_passengers: number; max_luggage: number; description?: Record<string, string> | string; active: boolean; }
 interface RoutePrice { route_id: string; car_id: string; currency: string; amount: number; }
 interface SlotReservation { car_id: string; slot: string; }
+interface PaymentMethod { id: string; code: string; display_name: string; details: string | null; requires_screenshot: boolean; }
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
 
@@ -27,6 +28,8 @@ export default function DirectRideWizard() {
   const [cars, setCars] = useState<Car[]>([]);
   const [prices, setPrices] = useState<RoutePrice[]>([]);
   const [availability, setAvailability] = useState<SlotReservation[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
+  const [bankDetails, setBankDetails] = useState('');
   const steps = t.raw('steps') as string[];
 
   const [routeMode, setRouteMode] = useState<'preset' | 'custom'>('preset');
@@ -48,7 +51,7 @@ export default function DirectRideWizard() {
   const [passportFile, setPassportFile] = useState<File | null>(null);
   const [passportPath, setPassportPath] = useState('');
 
-  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'bank_transfer'>('cash');
+  const [paymentMethod, setPaymentMethod] = useState('');
   const [paymentScreenshot, setPaymentScreenshot] = useState<File | null>(null);
   const [paymentPath, setPaymentPath] = useState('');
   const [hotelText, setHotelText] = useState('');
@@ -66,21 +69,30 @@ export default function DirectRideWizard() {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: locs }, { data: rts }, { data: cs }, { data: prs }, { data: av }] = await Promise.all([
-        supabase.from('locations').select('*').eq('active', true),
-        supabase.from('routes').select('*').eq('active', true),
-        supabase.from('cars').select('*').eq('active', true),
-        supabase.from('route_prices').select('*'),
-        supabase.from('car_booking_schedule').select('car_id,slot'),
-      ]);
+      const [{ data: locs }, { data: rts }, { data: cs }, { data: prs }, { data: av }, { data: pms }, { data: bank }] =
+        await Promise.all([
+          supabase.from('locations').select('*').eq('active', true),
+          supabase.from('routes').select('*').eq('active', true),
+          supabase.from('cars').select('*').eq('active', true),
+          supabase.from('route_prices').select('*'),
+          supabase.from('car_booking_schedule').select('car_id,slot'),
+          supabase.from('payment_methods').select('*').eq('active', true),
+          supabase.from('settings').select('value').eq('key', 'bank_details').maybeSingle(),
+        ]);
       setLocations((locs as Location[]) ?? []);
       setRoutes((rts as Route[]) ?? []);
       setCars((cs as Car[]) ?? []);
       setPrices((prs as RoutePrice[]) ?? []);
       setAvailability((av as SlotReservation[]) ?? []);
+      setBankDetails(typeof bank?.value === 'string' ? bank.value : '');
+      const methods = (pms as PaymentMethod[]) ?? [];
+      setPaymentMethods(methods);
+      if (methods.length > 0 && !paymentMethod) setPaymentMethod(methods[0].code);
     };
     load();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectedPayment = paymentMethods.find((p) => p.code === paymentMethod) ?? null;
 
   const pick = (name: Record<string, string> | string, id: string) =>
     typeof name === 'string' ? name : name?.[localeRef] || name?.en || id;
@@ -158,8 +170,16 @@ export default function DirectRideWizard() {
         pp = await uploadFile(passportFile, 'passports');
         setPassportPath(pp);
       }
+      if (!paymentMethod) {
+        setError(t('selectPaymentMethod'));
+        return;
+      }
+      if (selectedPayment?.requires_screenshot && !paymentScreenshot) {
+        setError(t('paymentScreenshotRequired'));
+        return;
+      }
       let sp = paymentPath;
-      if (paymentMethod === 'bank_transfer' && paymentScreenshot && !sp) {
+      if (selectedPayment?.requires_screenshot && paymentScreenshot && !sp) {
         sp = await uploadFile(paymentScreenshot, 'payment-screenshots');
         setPaymentPath(sp);
       }
@@ -491,35 +511,47 @@ export default function DirectRideWizard() {
 
         {step === 5 && (
           <div className="space-y-4">
-            <label className="flex items-center gap-3 text-pharaoh-ivory">
-              <input
-                type="radio"
-                name="payment"
-                checked={paymentMethod === 'cash'}
-                onChange={() => setPaymentMethod('cash')}
-                className="accent-gold"
-              />
-              {t('cash')}
-            </label>
-            <label className="flex items-center gap-3 text-pharaoh-ivory">
-              <input
-                type="radio"
-                name="payment"
-                checked={paymentMethod === 'bank_transfer'}
-                onChange={() => setPaymentMethod('bank_transfer')}
-                className="accent-gold"
-              />
-              {t('bankTransfer')}
-            </label>
-            {paymentMethod === 'bank_transfer' && (
-              <div>
-                <label className="block text-pharaoh-ivory mb-2">{t('paymentScreenshot')}</label>
+            {paymentMethods.length === 0 && (
+              <p className="text-pharaoh-ivory/60">{t('noPaymentMethods')}</p>
+            )}
+            {paymentMethods.map((pm) => (
+              <label
+                key={pm.id}
+                className={`flex items-start gap-3 p-4 rounded border cursor-pointer transition-colors ${pm.code === paymentMethod ? 'border-gold bg-gold/10' : 'border-gold/30'}`}
+              >
                 <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={(e) => setPaymentScreenshot(e.target.files?.[0] ?? null)}
-                  className="w-full text-pharaoh-ivory"
+                  type="radio"
+                  name="payment"
+                  checked={paymentMethod === pm.code}
+                  onChange={() => setPaymentMethod(pm.code)}
+                  className="accent-gold mt-1"
                 />
+                <span className="flex-1 text-pharaoh-ivory">
+                  {pm.display_name}
+                  {pm.details && <span className="block text-pharaoh-ivory/60 text-sm mt-1">{pm.details}</span>}
+                </span>
+              </label>
+            ))}
+            {selectedPayment?.requires_screenshot && (
+              <div className="space-y-4">
+                {bankDetails && (
+                  <div className="border border-gold/30 rounded p-4 text-pharaoh-ivory/80 text-sm whitespace-pre-wrap">
+                    {t('bankDetails')}:
+                    <p className="mt-1 font-mono">{bankDetails}</p>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-pharaoh-ivory mb-2">
+                    {t('paymentScreenshot')}
+                    <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setPaymentScreenshot(e.target.files?.[0] ?? null)}
+                    className="w-full text-pharaoh-ivory"
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -532,7 +564,7 @@ export default function DirectRideWizard() {
             <p><strong className="text-gold">{t('review.car')}:</strong> {selectedCar ? carName(selectedCar) : ''}</p>
             <p><strong className="text-gold">{t('review.passengers')}:</strong> {passengers} / <strong>{t('review.luggage')}:</strong> {luggage}</p>
             <p><strong className="text-gold">{t('review.price')}:</strong> {priceForCar(carId) != null ? `${priceForCar(carId)} ${activeCurrency}` : t('priceOnApproval')}</p>
-            <p><strong className="text-gold">{t('review.payment')}:</strong> {paymentMethod}</p>
+            <p><strong className="text-gold">{t('review.payment')}:</strong> {selectedPayment?.display_name ?? paymentMethod}</p>
             <p><strong className="text-gold">{t('review.client')}:</strong> {clientName} ({clientEmail})</p>
             {error && <p className="text-red-400 text-sm">{error}</p>}
           </div>

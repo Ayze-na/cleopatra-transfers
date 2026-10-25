@@ -22,8 +22,11 @@
     "react-hot-toast": "^2.4.1",
     "react-hook-form": "^7.54.2",
     "lucide-react": "^0.469.0",
-    "sharp": "^0.33.5",
+    "sharp": "^0.35.5",
     "resend": "^4.0.1"
+  },
+  "overrides": {
+    "postcss-selector-parser": "^7.1.6"
   },
   "devDependencies": {
     "typescript": "^5",

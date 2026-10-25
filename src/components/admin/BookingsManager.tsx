@@ -23,23 +23,27 @@ interface Booking {
 
 interface Loc { id: string; name: Record<string, string> | string; }
 interface Rte { id: string; from_location_id: string; to_location_id: string; }
+interface PayMethod { code: string; display_name: string; }
 
 export default function BookingsManager() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
   const [locs, setLocs] = useState<Loc[]>([]);
   const [rtes, setRtes] = useState<Rte[]>([]);
+  const [payMethods, setPayMethods] = useState<PayMethod[]>([]);
 
   const load = async () => {
     setLoading(true);
-    const [{ data: b }, { data: l }, { data: r }] = await Promise.all([
+    const [{ data: b }, { data: l }, { data: r }, { data: pm }] = await Promise.all([
       supabase.from('direct_bookings').select('*').order('created_at', { ascending: false }),
       supabase.from('locations').select('id,name'),
       supabase.from('routes').select('id,from_location_id,to_location_id'),
+      supabase.from('payment_methods').select('code,display_name'),
     ]);
     setBookings((b as Booking[]) ?? []);
     setLocs((l as Loc[]) ?? []);
     setRtes((r as Rte[]) ?? []);
+    setPayMethods((pm as PayMethod[]) ?? []);
     setLoading(false);
   };
 
@@ -52,6 +56,9 @@ export default function BookingsManager() {
     if (!l) return '';
     return typeof l.name === 'string' ? l.name : (l.name?.en || l.name?.['ar'] || '');
   };
+
+  const payLabel = (code: string) =>
+    payMethods.find((p) => p.code === code)?.display_name ?? code;
 
   const routeLabel = (b: Booking) => {
     if (b.route_id) {
@@ -102,7 +109,7 @@ export default function BookingsManager() {
                 <td className="py-2">{routeLabel(b)}</td>
                 <td className="py-2">{new Date(b.trip_datetime).toLocaleString('en-GB', { timeZone: 'Africa/Cairo' })}</td>
                 <td className="py-2">{b.price_amount != null ? `${b.price_amount} ${b.currency}` : '—'}</td>
-                <td className="py-2">{b.payment_method} / {b.payment_status}</td>
+                <td className="py-2">{payLabel(b.payment_method)} / {b.payment_status}</td>
                 <td className="py-2">{b.status}</td>
                 <td className="py-2 space-x-2">
                   {b.passport_file_path && (

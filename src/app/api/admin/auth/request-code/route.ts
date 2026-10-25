@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { notificationProvider } from '@/lib/notifications/provider';
+import { readJsonBody } from '@/lib/api-protection';
 
 const requestSchema = z.object({
   email: z.string().email(),
@@ -9,7 +10,10 @@ const requestSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const body = await readJsonBody(request);
+    if (!body) {
+      return NextResponse.json({ error: 'Request too large or malformed' }, { status: 413 });
+    }
     const parsed = requestSchema.safeParse(body);
 
     if (!parsed.success) {

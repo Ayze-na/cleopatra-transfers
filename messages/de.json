@@ -92,7 +92,8 @@
     "dropoffPoint": "Zielort",
     "selectDropoff": "Zielort wählen",
     "datetimeCairo": "Datum & Uhrzeit (Kairo)",
-    "noCars": "Keine Fahrzeuge verfügbar. Bitte einen anderen Zeitpunkt versuchen.",    "passengers": "Anzahl der Passagiere",
+    "noCars": "Keine Fahrzeuge verfügbar. Bitte einen anderen Zeitpunkt versuchen.",
+    "passengers": "Anzahl der Passagiere",
     "luggage": "Anzahl der Gepäckstücke",
     "exceeds": "Übersteigt die Autokapazität. Bitte wählen Sie ein größeres Auto.",
     "fullName": "Vollständiger Name",
@@ -123,7 +124,11 @@
     "submitBooking": "Buchung absenden",
     "submitting": "Wird gesendet...",
     "completeSelection": "Bitte Route und Auto auswählen.",
-    "confirmHuman": "Bitte bestätigen Sie, dass Sie kein Roboter sind."
+    "confirmHuman": "Bitte bestätigen Sie, dass Sie kein Roboter sind.",
+    "selectPaymentMethod": "Bitte wählen Sie eine Zahlungsmethode.",
+    "paymentScreenshotRequired": "Bitte laden Sie einen Screenshot Ihrer Zahlung hoch.",
+    "noPaymentMethods": "Derzeit keine Zahlungsmethoden verfügbar. Bitte kontaktieren Sie uns zur Zahlungsanordnung.",
+    "bankDetails": "Bankverbindung"
   },
   "tripFiles": {
     "title": "Reiseplan",

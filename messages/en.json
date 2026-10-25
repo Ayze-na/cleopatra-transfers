@@ -62,7 +62,16 @@
   "directRides": {
     "title": "Direct Rides",
     "subtitle": "Book a fixed-price transfer from point A to point B",
-    "steps": ["Route", "Date & Time", "Car", "Passengers", "Your Info", "Payment", "Review", "Confirmation"],
+    "steps": [
+      "Route",
+      "Date & Time",
+      "Car",
+      "Passengers",
+      "Your Info",
+      "Payment",
+      "Review",
+      "Confirmation"
+    ],
     "currency": "Currency",
     "presetRoutes": "Choose a route",
     "customLocations": "Enter your places",
@@ -83,7 +92,8 @@
     "dropoffPoint": "Drop-off Point",
     "selectDropoff": "Select drop-off point",
     "datetimeCairo": "Date & Time (Cairo)",
-    "noCars": "No cars available. Please try a different time.",    "passengers": "Number of Passengers",
+    "noCars": "No cars available. Please try a different time.",
+    "passengers": "Number of Passengers",
     "luggage": "Number of Luggage Pieces",
     "exceeds": "Exceeds car capacity. Please choose a larger car.",
     "fullName": "Full name",
@@ -114,7 +124,11 @@
     "submitBooking": "Submit Booking",
     "submitting": "Submitting...",
     "completeSelection": "Please complete route and car selection.",
-    "confirmHuman": "Please confirm you are human."
+    "confirmHuman": "Please confirm you are human.",
+    "selectPaymentMethod": "Please select a payment method.",
+    "paymentScreenshotRequired": "Please upload a screenshot of your payment.",
+    "noPaymentMethods": "No payment methods available. Please contact us to arrange payment.",
+    "bankDetails": "Bank account details"
   },
   "tripFiles": {
     "title": "Trip Files",
