@@ -13,6 +13,7 @@ interface Location { id: string; name: Record<string, string> | string; type: st
 interface Route { id: string; from_location_id: string; to_location_id: string; active: boolean; }
 interface Car { id: string; name: Record<string, string> | string; max_passengers: number; max_luggage: number; description?: Record<string, string> | string; active: boolean; }
 interface RoutePrice { route_id: string; car_id: string; currency: string; amount: number; }
+interface SlotReservation { car_id: string; slot: string; }
 
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '';
 
@@ -25,11 +26,17 @@ export default function DirectRideWizard() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [cars, setCars] = useState<Car[]>([]);
   const [prices, setPrices] = useState<RoutePrice[]>([]);
+  const [availability, setAvailability] = useState<SlotReservation[]>([]);
   const steps = t.raw('steps') as string[];
 
+  const [routeMode, setRouteMode] = useState<'preset' | 'custom'>('preset');
   const [pickupId, setPickupId] = useState('');
   const [dropoffId, setDropoffId] = useState('');
-  const [tripDatetime, setTripDatetime] = useState('');
+  const [customPickup, setCustomPickup] = useState('');
+  const [customDropoff, setCustomDropoff] = useState('');
+  const [tripDate, setTripDate] = useState('');
+  const [tripTime, setTripTime] = useState('');
+  const [meridiem, setMeridiem] = useState<'AM' | 'PM'>('PM');
   const [carId, setCarId] = useState('');
   const [passengers, setPassengers] = useState(1);
   const [luggage, setLuggage] = useState(0);
@@ -59,39 +66,61 @@ export default function DirectRideWizard() {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: locs }, { data: rts }, { data: cs }, { data: prs }] = await Promise.all([
+      const [{ data: locs }, { data: rts }, { data: cs }, { data: prs }, { data: av }] = await Promise.all([
         supabase.from('locations').select('*').eq('active', true),
         supabase.from('routes').select('*').eq('active', true),
         supabase.from('cars').select('*').eq('active', true),
         supabase.from('route_prices').select('*'),
+        supabase.from('car_booking_schedule').select('car_id,slot'),
       ]);
       setLocations((locs as Location[]) ?? []);
       setRoutes((rts as Route[]) ?? []);
       setCars((cs as Car[]) ?? []);
       setPrices((prs as RoutePrice[]) ?? []);
+      setAvailability((av as SlotReservation[]) ?? []);
     };
     load();
   }, []);
 
   const pick = (name: Record<string, string> | string, id: string) =>
     typeof name === 'string' ? name : name?.[localeRef] || name?.en || id;
-  const locName = (l: Location) => pick(l.name, l.id);
+  const locName = (l: Location | null) => (l ? pick(l.name, l.id) : '');
   const carName = (c: Car) => pick(c.name, c.id);
 
   const validDropoffs = routes
     .filter((r) => r.from_location_id === pickupId)
     .map((r) => r.to_location_id);
 
-  const selectedRoute = routes.find((r) => r.from_location_id === pickupId && r.to_location_id === dropoffId);
+  const isPreset = routeMode === 'preset' && !!pickupId && !!dropoffId;
+  const selectedRoute = isPreset
+    ? routes.find((r) => r.from_location_id === pickupId && r.to_location_id === dropoffId)
+    : undefined;
   const routeId = selectedRoute?.id;
 
-  const availableCars = cars.filter((c) =>
-    prices.some((p) => p.route_id === routeId && p.car_id === c.id && p.currency === activeCurrency)
-  );
+  const pickupName = isPreset ? locName(locations.find((l) => l.id === pickupId) ?? null) : customPickup.trim();
+  const dropoffName = isPreset ? locName(locations.find((l) => l.id === dropoffId) ?? null) : customDropoff.trim();
+
+  const hour12 = parseInt(tripTime.split(':')[0] || '0', 10);
+  const isBookedCar = (cid: string): boolean =>
+    !!tripDate && availability.some((a) => a.car_id === cid && a.slot === `${tripDate}T${String(hour12).padStart(2, '0')}00`);
+
+  const routeComplete = routeMode === 'custom' ? customPickup.trim().length > 1 && customDropoff.trim().length > 1 : isPreset;
+
+  const allCars = cars;
 
   const selectedCar = cars.find((c) => c.id === carId);
   const priceForCar = (cid: string) =>
     prices.find((p) => p.route_id === routeId && p.car_id === cid && p.currency === activeCurrency)?.amount;
+
+  const tripIso = (): string | null => {
+    if (!tripDate || !tripTime) return null;
+    const [h, m] = tripTime.split(':').map(Number);
+    let hh = h % 12;
+    if (meridiem === 'PM') hh += 12;
+    const d = new Date(`${tripDate}T${String(hh).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString();
+  };
 
   const nextStep = () => {
     if (step < steps.length - 1) setStep(step + 1);
@@ -110,7 +139,11 @@ export default function DirectRideWizard() {
 
   const handleSubmit = async () => {
     setError('');
-    if (!routeId || !carId) {
+    if (!routeComplete || !carId) {
+      setError(t('completeSelection'));
+      return;
+    }
+    if (!tripIso()) {
       setError(t('completeSelection'));
       return;
     }
@@ -135,9 +168,12 @@ export default function DirectRideWizard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          route_id: routeId,
+          route_id: routeId ?? undefined,
           car_id: carId,
-          trip_datetime: new Date(tripDatetime).toISOString(),
+          pickup_name: isPreset ? undefined : customPickup.trim(),
+          dropoff_name: isPreset ? undefined : customDropoff.trim(),
+          trip_datetime: tripIso() as string,
+          price_amount: priceForCar(carId) ?? null,
           hotel_text: hotelText,
           passengers,
           luggage,
@@ -199,87 +235,178 @@ export default function DirectRideWizard() {
 
         {step === 0 && (
           <div className="space-y-4">
-            <div>
-              <label className="block text-pharaoh-ivory mb-2">{t('pickupPoint')}</label>
-              <select
-                value={pickupId}
-                onChange={(e) => {
-                  setPickupId(e.target.value);
-                  setDropoffId('');
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setRouteMode('preset');
                   setCarId('');
                 }}
-                className="w-full bg-pharaoh-bg border border-gold/30 rounded px-4 py-3 text-pharaoh-ivory"
+                className={`px-4 py-2 rounded border text-sm transition-colors ${routeMode === 'preset' ? 'bg-gold text-black border-gold' : 'border-gold/30 text-pharaoh-ivory hover:border-gold'}`}
               >
-                <option value="">{t('selectPickup')}</option>
-                {locations.map((l) => (
-                  <option key={l.id} value={l.id}>{locName(l)}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-pharaoh-ivory mb-2">{t('dropoffPoint')}</label>
-              <select
-                value={dropoffId}
-                onChange={(e) => {
-                  setDropoffId(e.target.value);
+                {t('presetRoutes')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setRouteMode('custom');
                   setCarId('');
                 }}
-                disabled={!pickupId}
-                className="w-full bg-pharaoh-bg border border-gold/30 rounded px-4 py-3 text-pharaoh-ivory"
+                className={`px-4 py-2 rounded border text-sm transition-colors ${routeMode === 'custom' ? 'bg-gold text-black border-gold' : 'border-gold/30 text-pharaoh-ivory hover:border-gold'}`}
               >
-                <option value="">{t('selectDropoff')}</option>
-                {locations
-                  .filter((l) => validDropoffs.includes(l.id))
-                  .map((l) => (
-                    <option key={l.id} value={l.id}>{locName(l)}</option>
-                  ))}
-              </select>
+                {t('customLocations')}
+              </button>
             </div>
+            {routeMode === 'preset' ? (
+              <>
+                <div>
+                  <label className="block text-pharaoh-ivory mb-2">{t('pickupPoint')}</label>
+                  <select
+                    value={pickupId}
+                    onChange={(e) => {
+                      setPickupId(e.target.value);
+                      setDropoffId('');
+                      setCarId('');
+                    }}
+                    className="w-full bg-pharaoh-bg border border-gold/30 rounded px-4 py-3 text-pharaoh-ivory"
+                  >
+                    <option value="">{t('selectPickup')}</option>
+                    {locations.map((l) => (
+                      <option key={l.id} value={l.id}>{locName(l)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-pharaoh-ivory mb-2">{t('dropoffPoint')}</label>
+                  <select
+                    value={dropoffId}
+                    onChange={(e) => {
+                      setDropoffId(e.target.value);
+                      setCarId('');
+                    }}
+                    disabled={!pickupId}
+                    className="w-full bg-pharaoh-bg border border-gold/30 rounded px-4 py-3 text-pharaoh-ivory"
+                  >
+                    <option value="">{t('selectDropoff')}</option>
+                    {locations
+                      .filter((l) => validDropoffs.includes(l.id))
+                      .map((l) => (
+                        <option key={l.id} value={l.id}>{locName(l)}</option>
+                      ))}
+                  </select>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-pharaoh-ivory mb-2">{t('customPickup')}</label>
+                  <input
+                    value={customPickup}
+                    onChange={(e) => {
+                      setCustomPickup(e.target.value);
+                      setCarId('');
+                    }}
+                    placeholder={t('customPickupPlaceholder')}
+                    className="w-full bg-pharaoh-bg border border-gold/30 rounded px-4 py-3 text-pharaoh-ivory"
+                  />
+                </div>
+                <div>
+                  <label className="block text-pharaoh-ivory mb-2">{t('customDropoff')}</label>
+                  <input
+                    value={customDropoff}
+                    onChange={(e) => {
+                      setCustomDropoff(e.target.value);
+                      setCarId('');
+                    }}
+                    placeholder={t('customDropoffPlaceholder')}
+                    className="w-full bg-pharaoh-bg border border-gold/30 rounded px-4 py-3 text-pharaoh-ivory"
+                  />
+                </div>
+              </>
+            )}
           </div>
         )}
 
         {step === 1 && (
           <div className="space-y-4">
             <div>
-              <label className="block text-pharaoh-ivory mb-2">{t('datetimeCairo')}</label>
+              <label className="block text-pharaoh-ivory mb-2">{t('dateCairo')}</label>
               <input
-                type="datetime-local"
-                value={tripDatetime}
-                onChange={(e) => setTripDatetime(e.target.value)}
+                type="date"
+                value={tripDate}
+                min={new Date().toISOString().slice(0, 10)}
+                onChange={(e) => setTripDate(e.target.value)}
                 className="w-full bg-pharaoh-bg border border-gold/30 rounded px-4 py-3 text-pharaoh-ivory"
               />
+            </div>
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-pharaoh-ivory mb-2">{t('time')}</label>
+                <input
+                  type="time"
+                  value={tripTime}
+                  onChange={(e) => setTripTime(e.target.value)}
+                  className="w-full bg-pharaoh-bg border border-gold/30 rounded px-4 py-3 text-pharaoh-ivory"
+                />
+              </div>
+              <div>
+                <label className="block text-pharaoh-ivory mb-2">{t('meridiem')}</label>
+                <div className="flex gap-2">
+                  {(['AM', 'PM'] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMeridiem(m)}
+                      className={`px-5 py-3 rounded border font-semibold transition-colors ${meridiem === m ? 'bg-gold text-black border-gold' : 'border-gold/30 text-pharaoh-ivory hover:border-gold'}`}
+                    >
+                      {m}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )}
 
         {step === 2 && (
           <div className="space-y-4">
-            {availableCars.length === 0 && (
+            <p className="text-pharaoh-ivory/60 text-sm">{t('carsNote')}</p>
+            {allCars.length === 0 && (
               <p className="text-pharaoh-ivory/60">{t('noCars')}</p>
             )}
-            {availableCars.map((c) => (
-              <label
-                key={c.id}
-                className={`flex items-center gap-4 p-4 rounded border cursor-pointer transition-colors ${carId === c.id ? 'border-gold bg-gold/10' : 'border-gold/30'}`}
-              >
-                <input
-                  type="radio"
-                  name="car"
-                  checked={carId === c.id}
-                  onChange={() => setCarId(c.id)}
-                  className="accent-gold"
-                />
-                <div className="flex-1">
-                  <div className="text-pharaoh-ivory font-semibold">{carName(c)}</div>
-                  <div className="text-pharaoh-ivory/60 text-sm">
-                    {c.max_passengers} passengers, {c.max_luggage} luggage
+            {allCars.map((c) => {
+              const booked = isBookedCar(c.id);
+              const price = priceForCar(c.id);
+              return (
+                <label
+                  key={c.id}
+                  className={`flex items-center gap-4 p-4 rounded border cursor-pointer transition-colors ${carId === c.id ? 'border-gold bg-gold/10' : 'border-gold/30'}`}
+                >
+                  <input
+                    type="radio"
+                    name="car"
+                    checked={carId === c.id}
+                    disabled={booked}
+                    onChange={() => setCarId(c.id)}
+                    className="accent-gold"
+                  />
+                  <div className="flex-1">
+                    <div className="text-pharaoh-ivory font-semibold flex items-center gap-2">
+                      {carName(c)}
+                      {booked && (
+                        <span className="px-2 py-0.5 rounded bg-danger/20 text-danger text-xs font-semibold">{t('booked')}</span>
+                      )}
+                    </div>
+                    <div className="text-pharaoh-ivory/60 text-sm">
+                      {c.max_passengers} {t('passengersLabel')} · {c.max_luggage} {t('luggageLabel')}
+                    </div>
                   </div>
-                </div>
-                <div className="text-gold font-bold">
-                    {priceForCar(c.id)} {activeCurrency}
-                </div>
-              </label>
-            ))}
+                  <div className={`font-bold ${price != null ? 'text-gold' : 'text-pharaoh-ivory/50 text-sm'}`}>
+                    {price != null ? `${price} ${activeCurrency}` : t('priceOnApproval')}
+                  </div>
+                </label>
+              );
+            })}
           </div>
         )}
 
@@ -400,11 +527,11 @@ export default function DirectRideWizard() {
 
         {step === 6 && (
           <div className="space-y-3 text-pharaoh-ivory">
-            <p><strong className="text-gold">{t('review.route')}:</strong> {locName(locations.find((l) => l.id === pickupId)!)} → {locName(locations.find((l) => l.id === dropoffId)!)}</p>
-            <p><strong className="text-gold">{t('review.datetime')}:</strong> {tripDatetime}</p>
+            <p><strong className="text-gold">{t('review.route')}:</strong> {pickupName || '—'} → {dropoffName || '—'}</p>
+            <p><strong className="text-gold">{t('review.datetime')}:</strong> {tripDate} {tripTime} {meridiem} (Cairo)</p>
             <p><strong className="text-gold">{t('review.car')}:</strong> {selectedCar ? carName(selectedCar) : ''}</p>
             <p><strong className="text-gold">{t('review.passengers')}:</strong> {passengers} / <strong>{t('review.luggage')}:</strong> {luggage}</p>
-            <p><strong className="text-gold">{t('review.price')}:</strong> {priceForCar(carId)} {activeCurrency}</p>
+            <p><strong className="text-gold">{t('review.price')}:</strong> {priceForCar(carId) != null ? `${priceForCar(carId)} ${activeCurrency}` : t('priceOnApproval')}</p>
             <p><strong className="text-gold">{t('review.payment')}:</strong> {paymentMethod}</p>
             <p><strong className="text-gold">{t('review.client')}:</strong> {clientName} ({clientEmail})</p>
             {error && <p className="text-red-400 text-sm">{error}</p>}

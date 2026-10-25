@@ -1,0 +1,28 @@
+{
+  "name": "Cleopatra Transfers",
+  "short_name": "CleoTransfers",
+  "description": "Private car transfers in Egypt - Hurghada, Aswan, Luxor & Marsa Alam. Book direct rides and custom trips.",
+  "id": "/",
+  "start_url": "/en",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#18212D",
+  "theme_color": "#18212D",
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["travel"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Book a Direct Ride",
+      "short_name": "Direct Ride",
+      "url": "/en/direct-rides",
+      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

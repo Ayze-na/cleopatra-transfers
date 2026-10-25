@@ -4,18 +4,22 @@ import { createClient } from '@/lib/supabase/server';
 import { notificationProvider } from '@/lib/notifications/provider';
 import { verifyTurnstile, enforceRateLimit, turnstileConfigured } from '@/lib/api-protection';
 
-const bookingSchema = z.object({
-  route_id: z.string().uuid(),
-  car_id: z.string().uuid(),
-  trip_datetime: z.string().datetime(),
-  hotel_text: z.string().optional(),
+const bookingSchema = z
+  .object({
+    route_id: z.string().uuid().optional(),
+    car_id: z.string().uuid(),
+    pickup_name: z.string().max(300).optional(),
+    dropoff_name: z.string().max(300).optional(),
+    trip_datetime: z.string().datetime(),
+    price_amount: z.number().optional().nullable(),
+    hotel_text: z.string().optional(),
   passengers: z.number().int().min(1).max(50),
   luggage: z.number().int().min(0).max(50),
   client_name: z.string().min(2).max(200),
   client_phone: z.string().min(5).max(30),
   client_email: z.string().email(),
   nationality: z.string().min(2).max(100),
-  passport_file_path: z.string().min(1),
+  passport_file_path: z.string().max(500).or(z.literal('')).optional(),
   payment_method: z.enum(['cash', 'bank_transfer']),
   payment_screenshot_path: z.string().optional(),
   currency: z.enum(['USD', 'EGP', 'EUR']),
@@ -62,6 +66,8 @@ export async function POST(request: NextRequest) {
       payload: {
         route_id: data.route_id,
         car_id: data.car_id,
+        pickup_name: data.pickup_name,
+        dropoff_name: data.dropoff_name,
         trip_datetime: data.trip_datetime,
         hotel_text: data.hotel_text,
         passengers: data.passengers,
@@ -81,12 +87,8 @@ export async function POST(request: NextRequest) {
     const booking = Array.isArray(bookingRows) ? bookingRows[0] : bookingRows;
 
     if (error || !booking) {
-      const priceMissing = error?.message?.includes('Price not available');
       console.error('Booking insert error:', error?.message);
-      return NextResponse.json(
-        { error: priceMissing ? 'Price not available for this route and car' : 'Failed to create booking' },
-        { status: priceMissing ? 400 : 500 }
-      );
+      return NextResponse.json({ error: 'Failed to create booking' }, { status: 500 });
     }
 
     // Best-effort notifications (do not block response)

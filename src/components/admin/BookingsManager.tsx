@@ -7,10 +7,12 @@ interface Booking {
   id: string;
   reference: string;
   client_name: string;
-  route_id: string;
+  route_id: string | null;
   car_id: string;
+  pickup_name?: string;
+  dropoff_name?: string;
   trip_datetime: string;
-  price_amount: number;
+  price_amount: number | null;
   currency: string;
   payment_method: string;
   payment_status: string;
@@ -19,20 +21,45 @@ interface Booking {
   payment_screenshot_path?: string;
 }
 
+interface Loc { id: string; name: Record<string, string> | string; }
+interface Rte { id: string; from_location_id: string; to_location_id: string; }
+
 export default function BookingsManager() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(false);
+  const [locs, setLocs] = useState<Loc[]>([]);
+  const [rtes, setRtes] = useState<Rte[]>([]);
 
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from('direct_bookings').select('*').order('created_at', { ascending: false });
-    setBookings((data as Booking[]) ?? []);
+    const [{ data: b }, { data: l }, { data: r }] = await Promise.all([
+      supabase.from('direct_bookings').select('*').order('created_at', { ascending: false }),
+      supabase.from('locations').select('id,name'),
+      supabase.from('routes').select('id,from_location_id,to_location_id'),
+    ]);
+    setBookings((b as Booking[]) ?? []);
+    setLocs((l as Loc[]) ?? []);
+    setRtes((r as Rte[]) ?? []);
     setLoading(false);
   };
 
   useEffect(() => {
     load();
   }, []);
+
+  const locName = (id?: string) => {
+    const l = locs.find((x) => x.id === id);
+    if (!l) return '';
+    return typeof l.name === 'string' ? l.name : (l.name?.en || l.name?.['ar'] || '');
+  };
+
+  const routeLabel = (b: Booking) => {
+    if (b.route_id) {
+      const r = rtes.find((x) => x.id === b.route_id);
+      if (r) return `${locName(r.from_location_id)} → ${locName(r.to_location_id)}`;
+    }
+    return `${b.pickup_name || '—'} → ${b.dropoff_name || '—'}`;
+  };
 
   const updateStatus = async (id: string, status: string) => {
     await supabase.from('direct_bookings').update({ status }).eq('id', id);
@@ -58,7 +85,8 @@ export default function BookingsManager() {
             <tr className="text-gold border-b border-gold/30">
               <th className="py-2 text-left">Ref</th>
               <th className="py-2 text-left">Client</th>
-              <th className="py-2 text-left">When</th>
+              <th className="py-2 text-left">Route</th>
+              <th className="py-2 text-left">When (Cairo)</th>
               <th className="py-2 text-left">Price</th>
               <th className="py-2 text-left">Payment</th>
               <th className="py-2 text-left">Status</th>
@@ -71,8 +99,9 @@ export default function BookingsManager() {
               <tr key={b.id} className="border-b border-gold/10">
                 <td className="py-2">{b.reference}</td>
                 <td className="py-2">{b.client_name}</td>
-                <td className="py-2">{new Date(b.trip_datetime).toLocaleString()}</td>
-                <td className="py-2">{b.price_amount} {b.currency}</td>
+                <td className="py-2">{routeLabel(b)}</td>
+                <td className="py-2">{new Date(b.trip_datetime).toLocaleString('en-GB', { timeZone: 'Africa/Cairo' })}</td>
+                <td className="py-2">{b.price_amount != null ? `${b.price_amount} ${b.currency}` : '—'}</td>
                 <td className="py-2">{b.payment_method} / {b.payment_status}</td>
                 <td className="py-2">{b.status}</td>
                 <td className="py-2 space-x-2">
